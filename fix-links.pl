@@ -2,7 +2,6 @@
 use strict;
 use warnings;
 use File::Find;
-use File::Slurp qw(read_file write_file); # если нет - используем ниже вариант без него
 
 my $target = shift @ARGV or die "Usage: $0 <vercel|cloudflare>\n";
 
@@ -17,34 +16,34 @@ my $old = 'https://holy-bible-matters.github.io';
 find(sub {
   return unless -f && /\.html$/;
 
-  open my $fh, '<', $_ or return;
+  open my $in, '<', $_ or return;
   local $/;
-  my $content = <$fh>;
-  close $fh;
+  my $content = <$in>;
+  close $in;
 
   my $original = $content;
 
-  # Защищаем canonical / og:url / twitter:url (временно заменяем на плейсхолдеры)
+  # 1. Защита canonical, og:url, twitter:url
   my @protected;
   $content =~ s{(<(?:link|meta)[^>]*(?:rel=["']canonical["']|property=["']og:url["']|name=["']twitter:url["'])[^>]*>)}{
     push @protected, $1;
     "___PROTECTED_" . $#protected . "___"
   }ge;
 
-  # Защищаем специальные ссылки "текст = адрес GitHub"
-  $content =~ s{(<a[^>]*href=["']$old/?["'][^>]*>https://holy-bible-matters\.github\.io/?</a>)}{
+  # 2. Защита специальных ссылок
+  $content =~ s{(<a[^>]*href=["']\Q$old\E/?["'][^>]*>https://holy-bible-matters\.github\.io/?</a>)}{
     push @protected, $1;
     "___PROTECTED_" . $#protected . "___"
   }ge;
 
-  # Меняем домен везде
+  # 3. Замена домена
   $content =~ s/\Q$old\E/$new/g;
 
-  # Возвращаем защищённые куски
+  # 4. Возврат защищённых частей
   $content =~ s/___PROTECTED_(\d+)___/$protected[$1]/g;
 
   if ($content ne $original) {
-    open my $out, '>', $_ or warn "Cannot write $_\n";
+    open my $out, '>', $_ or warn "Cannot write $File::Find::name\n";
     print $out $content;
     close $out;
   }
